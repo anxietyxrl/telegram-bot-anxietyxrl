@@ -17,7 +17,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_ids.add(update.effective_user.id)
     await update.message.reply_text(
         "Привет! Я буду присылать каждый день в 9:00 утра по Караганде, сколько прошло с 10.10.2024.\n"
-        "Можешь также написать /сколько в любое время."
+        "Можешь также написать /time в любое время."
     )
 
 async def сколько(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -48,7 +48,7 @@ async def daily_message_task(app):
 if __name__ == '__main__':
     app = ApplicationBuilder().token(os.getenv("BOT_TOKEN")).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("сколько", сколько))
+    app.add_handler(CommandHandler("time", сколько))
     app.job_queue.run_once(lambda *_: asyncio.create_task(daily_message_task(app)), when=0)
     print("Бот запущен")
     app.run_polling()
