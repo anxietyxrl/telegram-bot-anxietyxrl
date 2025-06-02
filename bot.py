@@ -77,11 +77,15 @@ async def daily_message_task(app):
             except Exception as e:
                 print(f"Ошибка при отправке пользователю {user_id}: {e}")
 
-if __name__ == '__main__':
+async def main():
     app = ApplicationBuilder().token(os.getenv("BOT_TOKEN")).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("skolko", skolko))
     app.add_handler(CallbackQueryHandler(handle_button))
-    asyncio.create_task(daily_message_task(app))
+
+    asyncio.create_task(daily_message_task(app))  # ✅ теперь работает корректно
     print("Бот запущен")
-    app.run_polling()
+    await app.run_polling()
+
+if name == "__main__":
+    asyncio.run(main())
