@@ -29,7 +29,11 @@ def get_time_difference():
     days = delta.days
     hours = delta.seconds // 3600
     minutes = (delta.seconds % 3600) // 60
-    return f"С 10 октября 2024 года прошло:\n{days} дней, {hours} часов и {minutes} минут."
+    seconds = delta.seconds % 60
+    return (
+        f"С 10 октября 2024 года прошло:\n"
+        f"{days} дней, {hours} часов, {minutes} минут и {seconds} секунд."
+    )
 
 async def daily_message_task(app):
     while True:
