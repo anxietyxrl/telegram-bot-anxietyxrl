@@ -78,7 +78,7 @@ async def daily_message_task(app):
             except Exception as e:
                 print(f"Ошибка при отправке пользователю {user_id}: {e}")
 
-if name == "__main__":
+if __name__ == "__main__":
     app = ApplicationBuilder().token(os.getenv("BOT_TOKEN")).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("skolko", skolko))
