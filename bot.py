@@ -1,8 +1,10 @@
 import os
-from telegram import Update
+from random import choice
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
+    CallbackQueryHandler,
     ContextTypes,
 )
 from datetime import datetime, timedelta
@@ -15,13 +17,39 @@ user_ids = set()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_ids.add(update.effective_user.id)
+    keyboard = [
+        [InlineKeyboardButton("📆 Сколько прошло?", callback_data="skolko")],
+        [InlineKeyboardButton("😢 Мне грустно", callback_data="sad")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "Привет! Я буду присылать каждый день в 9:00 утра по Караганде, сколько прошло с 10.10.2024.\n"
-        "Можешь также написать /time в любое время."
+        "Привет! Я буду присылать каждый день в 9:00, сколько прошло с 10.10.2024.\n"
+        "Можешь нажать кнопку ниже, если хочешь узнать или получить поддержку ❤️",
+        reply_markup=reply_markup
     )
 
-async def сколько(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def skolko(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(get_time_difference())
+
+async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if query.data == "skolko":
+        await query.edit_message_text(get_time_difference())
+    elif query.data == "sad":
+        compliments = [
+            "Ты делаешь этот мир светлее 🌟",
+            "Твоя улыбка способна растопить лёд ❄️😊",
+            "Ты невероятно умная и сильная 💪",
+            "Ты заслуживаешь только самого лучшего 💖",
+            "Ты красива не только внешне, но и душой ✨",
+            "С тобой всегда тепло, даже в самую холодную погоду ☀️",
+            "Ты вдохновляешь 😍",
+            "Ты — как луч солнца в пасмурный день 🌈",
+            "Твоя энергия — заразительна 🔥",
+            "Ты особенная. Никто не может сравниться с тобой 🌹",
+        ]
+        await query.edit_message_text(choice(compliments))
 
 def get_time_difference():
     now = datetime.now(karaganda_tz)
@@ -52,7 +80,8 @@ async def daily_message_task(app):
 if __name__ == '__main__':
     app = ApplicationBuilder().token(os.getenv("BOT_TOKEN")).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("time", сколько))
-    app.job_queue.run_once(lambda *_: asyncio.create_task(daily_message_task(app)), when=0)
+    app.add_handler(CommandHandler("skolko", skolko))
+    app.add_handler(CallbackQueryHandler(handle_button))
+    asyncio.create_task(daily_message_task(app))
     print("Бот запущен")
     app.run_polling()
