@@ -46,7 +46,7 @@ async def daily_message_task(app):
                 print(f"Ошибка при отправке пользователю {user_id}: {e}")
 
 if __name__ == '__main__':
-    app = ApplicationBuilder().token(os.getenv("8054080132:AAEW20FIMr-Fpr6y12xh0kYFvXB_iTTjJe4")).build()
+    app = ApplicationBuilder().token(os.getenv("BOT_TOKEN")).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("сколько", сколько))
     app.job_queue.run_once(lambda *_: asyncio.create_task(daily_message_task(app)), when=0)
