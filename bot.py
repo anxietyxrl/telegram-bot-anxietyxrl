@@ -1,18 +1,37 @@
-import logging
-import asyncio
-from datetime import datetime, timedelta, time
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler,
-    filters, ContextTypes
-)
 import os
+import random
+import logging
+from datetime import datetime
+from pytz import timezone
 
-TOKEN = os.environ["BOT_TOKEN"]
-ADMIN_ID = int(os.environ["ADMIN_ID"])
-ALLOWED_USERS = list(map(int, os.environ.get("ALLOWED_USERS", "").split(",")))
-START_DATE = datetime(2024, 10, 10)
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    ContextTypes,
+    CommandHandler,
+    MessageHandler,
+    filters,
+)
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+# Константы
+ADMIN_ID = 6184367469
+WHITELIST = {6184367469, 6432605813}
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+PORT = int(os.getenv("PORT", 10000))
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+
+# Логирование
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Клавиатура
+keyboard = ReplyKeyboardMarkup(
+    [["Сколько прошло ⏳"], ["Мне грустно 😢"]],
+    resize_keyboard=True
+)
+
+# Комплименты
 COMPLIMENTS = [
     "Ты делаешь этот мир светлее 🌟",
     "Твоя улыбка способна растопить лёд ❄️😊",
@@ -24,78 +43,101 @@ COMPLIMENTS = [
     "Ты — как луч солнца в пасмурный день 🌈",
     "Твоя энергия — заразительна 🔥",
     "Ты особенная. Никто не может сравниться с тобой 🌹",
-    "Я тебя очень очень люблю, маленькая моя 💖",
-    "Ты — подарок в этом мире 🎁",
-    "Твои мысли и чувства — сокровище 💎",
-    "Ты достойна счастья и мира 🕊",
+    "Я тебя очень очень люблю маленькая моя💖",
 ]
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Проверка доступа
+async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user.id not in WHITELIST:
+        msg = (
+            f"⛔️ Попытка доступа от {user.first_name} (@{user.username}) [ID: {user.id}]\n"
+            f"Сообщение: {update.message.text}"
+        )
+        await context.bot.send_message(chat_id=ADMIN_ID, text=msg)
+        await update.message.reply_text("Извините, вы не добавлены в белый список бота.")
+        return False
+    return True
 
+# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ALLOWED_USERS:
-        await context.bot.send_message(chat_id=ADMIN_ID, text=f"Недопущенный пользователь: {user_id} ({update.effective_user.full_name})")
-        return
-    keyboard = [[InlineKeyboardButton("Мне грустно", callback_data="sad")]]
-    if user_id == ADMIN_ID:
-        keyboard.append([InlineKeyboardButton("Для администратора", callback_data="admin")])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Добро пожаловать. Чем могу помочь?", reply_markup=reply_markup)
-
-async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = query.from_user.id
-    await query.answer()
-
-    if query.data == "sad":
-        from random import choice
-        await query.edit_message_text(choice(COMPLIMENTS))
-
-    elif query.data == "admin" and user_id == ADMIN_ID:
-        keyboard = [[InlineKeyboardButton("Сообщение всем", callback_data="broadcast")]]
-        await query.edit_message_text("Опции администратора:", reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "broadcast" and user_id == ADMIN_ID:
-        context.user_data["awaiting_broadcast"] = True
-        await query.edit_message_text("Введите сообщение для рассылки:")
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ALLOWED_USERS:
-        return
-    if context.user_data.get("awaiting_broadcast") and user_id == ADMIN_ID:
-        context.user_data["awaiting_broadcast"] = False
-        for uid in ALLOWED_USERS:
-            try:
-                await context.bot.send_message(chat_id=uid, text=update.message.text)
-            except Exception as e:
-                logger.warning(f"Не удалось отправить сообщение {uid}: {e}")
-        await update.message.reply_text("Сообщение отправлено.")
-
-async def send_daily_message(context: ContextTypes.DEFAULT_TYPE):
-    now = datetime.utcnow()
-    passed = now - START_DATE
-    text = f"Прошло {passed.days} дней с 10 октября 2024 года."
-    for uid in ALLOWED_USERS:
-        try:
-            await context.bot.send_message(chat_id=uid, text=text)
-        except Exception as e:
-            logger.warning(f"Не удалось отправить ежедневное сообщение {uid}: {e}")
-
-async def main():
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(handle_callback))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    job_queue = app.job_queue
-    job_queue.run_daily(send_daily_message, time=time(hour=3, minute=0))  # 3:00 UTC = 9:00 Караганда
-    await app.run_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 10000)),
-        webhook_url=os.environ["WEBHOOK_URL"]
+    if not await check_access(update, context): return
+    await update.message.reply_text(
+        "Привет! 👋\nНажми кнопку ниже, чтобы узнать сколько прошло времени, или если тебе грустно 💌",
+        reply_markup=keyboard
     )
 
-if __name__ == "__main__":
+# Обработка кнопки "Сколько прошло"
+async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_access(update, context): return
+
+    start_date = datetime(2024, 10, 10, 9, 0, 0)
+    now = datetime.now()
+    diff = now - start_date
+
+    days = diff.days
+    hours, remainder = divmod(diff.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    text = f"⏳ С 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек."
+    await update.message.reply_text(text)
+
+# Обработка кнопки "Мне грустно"
+async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_access(update, context): return
+
+    user = update.effective_user
+    compliment = random.choice(COMPLIMENTS)
+    await update.message.reply_text(compliment)
+
+    user_info = f"@{user.username}" if user.username else user.first_name
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"😢 Пользователь {user_info} (ID: {user.id}) нажал «мне грустно»."
+    )
+
+# Фолбэк: любые другие сообщения
+async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(f"📩 Получено сообщение от {update.effective_user.id}: {update.message.text}")
+    await check_access(update, context)
+
+# Задача для ежедневной отправки времени
+async def send_daily_message(app):
+    start_date = datetime(2024, 10, 10, 9, 0, 0)
+    now = datetime.now()
+    diff = now - start_date
+    days = diff.days
+    hours, rem = divmod(diff.seconds, 3600)
+    minutes, seconds = divmod(rem, 60)
+
+    text = f"🕘 Доброе утро!\nС 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек."
+    await app.bot.send_message(chat_id=ADMIN_ID, text=text)
+
+# Главная функция
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Регистрируем обработчики
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Сколько прошло"), handle_time))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("мне грустно"), handle_sad))
+    app.add_handler(MessageHandler(filters.TEXT, fallback))
+
+    # Планировщик задачи
+    scheduler = AsyncIOScheduler(timezone=timezone("Asia/Almaty"))
+    scheduler.add_job(send_daily_message, "cron", hour=9, minute=0, args=[app])
+    scheduler.start()
+
+    logger.info("✅ Запуск run_webhook()")
+
+    await app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=f"{WEBHOOK_URL}/webhook",
+        allowed_updates=Update.ALL_TYPES
+    )
+
+# Запуск
+if name == "__main__":
+    import asyncio
     asyncio.run(main())
