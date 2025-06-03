@@ -180,16 +180,15 @@ async def main():
     )
 
 # Точка входа
-if __name__ == "__main__":
+if name == "__main__":
+    import sys
     import asyncio
-    asyncio.get_event_loop().create_task(main())
-    asyncio.get_event_loop().run_forever()
 
     try:
+        asyncio.get_event_loop().run_until_complete(main())
+    except RuntimeError as e:
+        # На Render может быть уже запущен event loop
+        print("⚠️ Ошибка запуска через run_until_complete. Попытка через create_task.")
         loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-    loop.create_task(main())
-    loop.run_forever()
+        loop.create_task(main())
+        loop.run_forever()
