@@ -1,23 +1,29 @@
 import os
-import random
 import logging
+import random
 from datetime import datetime
+
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder,
-    ContextTypes,
+    Application,
     CommandHandler,
     MessageHandler,
+    ContextTypes,
     filters,
 )
+from telegram.ext.webhook import WebhookServer
 
-# 🌐 Переменные окружения
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # https://your-app.onrender.com/webhook
+from aiohttp import web
+
+# === Настройки ===
 ADMIN_ID = 6184367469
 WHITELIST = {6184367469, 6432605813}
 
-# 🎀 Комплименты
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # должен начинаться с https://
+PORT = int(os.environ.get("PORT", "8080"))  # для Render
+
+# === Клавиатура ===
 COMPLIMENTS = [
     "Ты делаешь этот мир светлее 🌟",
     "Твоя улыбка способна растопить лёд ❄️😊",
@@ -32,28 +38,23 @@ COMPLIMENTS = [
     "Я тебя очень очень люблю маленькая моя💖",
 ]
 
-# 🎛 Клавиатура
 keyboard = ReplyKeyboardMarkup(
     [["Сколько прошло ⏳"], ["Мне грустно 😢"]],
     resize_keyboard=True
 )
 
-# 📋 Проверка доступа
+# === Обработчики ===
 async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id not in WHITELIST:
-        msg = (
-            f"⛔️ Попытка доступа от {user.first_name} (@{user.username}) [ID: {user.id}]\n"
-            f"Сообщение: {update.message.text}"
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"⛔️ Попытка доступа от {user.full_name} (@{user.username}) [ID: {user.id}]\nСообщение: {update.message.text}"
         )
-        await context.bot.send_message(chat_id=ADMIN_ID, text=msg)
-        await update.message.reply_text(
-            "Извините, но вы не добавлены в белый список бота, и не можете им пользоваться."
-        )
+        await update.message.reply_text("Извините, но вы не добавлены в белый список бота, и не можете им пользоваться.")
         return False
     return True
 
-# 👋 Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context): return
     await update.message.reply_text(
@@ -61,60 +62,48 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=keyboard
     )
 
-# ⏳ Обработка "Сколько прошло"
 async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context): return
     start_date = datetime(2024, 10, 10, 0, 0, 0)
     now = datetime.now()
     diff = now - start_date
-    days = diff.days
-    hours, remainder = divmod(diff.seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    text = f"⏳ С момента 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек."
-    await update.message.reply_text(text)
 
-# 😢 Обработка "Мне грустно"
-async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context): return
-    user = update.effective_user
-    compliment = random.choice(COMPLIMENTS)
-    await update.message.reply_text(compliment)
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"😢 Пользователь @{user.username or user.first_name} (ID: {user.id}) нажал «мне грустно»."
+    days = diff.days
+    hours, rem = divmod(diff.seconds, 3600)
+    minutes, seconds = divmod(rem, 60)
+
+    await update.message.reply_text(
+        f"⏳ С момента 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек."
     )
 
-# 🌐 Веб-сервер (webhook)
-async def main():
-    logging.basicConfig(level=logging.INFO)
+async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_access(update, context): return
+    compliment = random.choice(COMPLIMENTS)
+    await update.message.reply_text(compliment)
 
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    user = update.effective_user
+    info = f"@{user.username}" if user.username else user.first_name
+    await context.bot.send_message(chat_id=ADMIN_ID, text=f"😢 {info} (ID: {user.id}) нажал «мне грустно».")
+
+async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await check_access(update, context)
+
+# === Основной запуск ===
+async def main():
+    app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Сколько прошло"), handle_time))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Мне грустно"), handle_sad))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("мне грустно"), handle_sad))
-
-    async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await check_access(update, context)
-
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Мне грустно|мне грустно"), handle_sad))
     app.add_handler(MessageHandler(filters.TEXT, fallback))
 
-    # Удаляем старый webhook и ставим новый
-    await app.bot.delete_webhook(drop_pending_updates=True)
-    await app.initialize()
-    await app.start()
-    await app.bot.set_webhook(WEBHOOK_URL)
+    # Настройка webhook
+    webhook_server = WebhookServer(application=app, listen="0.0.0.0", port=PORT, url_path="/webhook")
+    await app.bot.set_webhook(url=WEBHOOK_URL + "/webhook")
+    print(f"✅ Бот запущен и слушает порт {PORT}")
+    await webhook_server.serve()
 
-    await app.updater.start_webhook(
-        listen="0.0.0.0",
-        port=10000,
-        url_path="webhook"
-    )
-
-    print("✅ Бот работает через webhook.")
-    await app.updater.idle()
-
-if __name__ == "__main__":
+if name == "__main__":
+    logging.basicConfig(level=logging.INFO)
     import asyncio
     asyncio.run(main())
