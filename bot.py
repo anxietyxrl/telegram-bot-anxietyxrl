@@ -14,7 +14,7 @@ from telegram.ext import (
 )
 
 # Вставь сюда свой Telegram user ID
-ADMIN_ID = 123456789  # ← замени на свой
+ADMIN_ID = ADMIN_ID  # ← замени на свой
 
 # Вставь сюда токен или используй os.getenv("BOT_TOKEN")
 BOT_TOKEN = os.getenv("BOT_TOKEN") or "1234567890:ABCDEF..."  # ← замени на свой токен
