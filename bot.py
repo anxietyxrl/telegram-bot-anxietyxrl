@@ -103,7 +103,7 @@ async def main():
         webhook_path="/path",  # укажи путь webhook (без домена)
     )
 
-if name == "__main__":
+if __name__ == "__main__":
     import asyncio
 
     asyncio.run(main())
