@@ -121,7 +121,7 @@ async def main():
         close_loop=False  # НЕ закрываем event loop после завершения
     )
 
-if name == "__main__":
+if __name__== "__main__":
     import aiohttp
     print("✅ aiohttp успешно импортирован")
 
