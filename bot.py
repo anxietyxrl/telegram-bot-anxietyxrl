@@ -98,6 +98,8 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT, fallback))
 
     # Устанавливаем webhook и запускаем сервер
+    print("✅ Готов к запуску run_webhook()")
+await app.run_webhook(...)
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
@@ -106,8 +108,9 @@ def main():
     )
 
 if __name__ == "__main__":
+    asyncio.run(main())
     main()
-
+    import asyncio
     loop = asyncio.get_event_loop()
     loop.create_task(main())
     loop.run_forever()
