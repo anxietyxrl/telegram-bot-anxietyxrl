@@ -2,7 +2,6 @@ import os
 import logging
 import random
 from datetime import datetime
-
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -11,19 +10,14 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
-from telegram.ext.webhook import WebhookServer
 
-from aiohttp import web
-
-# === Настройки ===
 ADMIN_ID = 6184367469
 WHITELIST = {6184367469, 6432605813}
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # должен начинаться с https://
-PORT = int(os.environ.get("PORT", "8080"))  # для Render
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # обязательно начинается с https://
+PORT = int(os.environ.get("PORT", "8080"))
 
-# === Клавиатура ===
 COMPLIMENTS = [
     "Ты делаешь этот мир светлее 🌟",
     "Твоя улыбка способна растопить лёд ❄️😊",
@@ -43,14 +37,12 @@ keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# === Обработчики ===
+# Проверка белого списка
 async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id not in WHITELIST:
-        await context.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=f"⛔️ Попытка доступа от {user.full_name} (@{user.username}) [ID: {user.id}]\nСообщение: {update.message.text}"
-        )
+        msg = f"⛔️ Попытка доступа от {user.full_name} (@{user.username}) [ID: {user.id}]\nСообщение: {update.message.text}"
+        await context.bot.send_message(chat_id=ADMIN_ID, text=msg)
         await update.message.reply_text("Извините, но вы не добавлены в белый список бота, и не можете им пользоваться.")
         return False
     return True
@@ -64,31 +56,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context): return
-    start_date = datetime(2024, 10, 10, 0, 0, 0)
+    start_date = datetime(2024, 10, 10)
     now = datetime.now()
     diff = now - start_date
-
     days = diff.days
     hours, rem = divmod(diff.seconds, 3600)
     minutes, seconds = divmod(rem, 60)
-
-    await update.message.reply_text(
-        f"⏳ С момента 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек."
-    )
+    text = f"⏳ С момента 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек."
+    await update.message.reply_text(text)
 
 async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context): return
+    user = update.effective_user
     compliment = random.choice(COMPLIMENTS)
     await update.message.reply_text(compliment)
-
-    user = update.effective_user
-    info = f"@{user.username}" if user.username else user.first_name
+    info = f"@{user.username}" if user.username else user.full_name
     await context.bot.send_message(chat_id=ADMIN_ID, text=f"😢 {info} (ID: {user.id}) нажал «мне грустно».")
 
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await check_access(update, context)
 
-# === Основной запуск ===
+# Запуск
 async def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -97,13 +85,17 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Мне грустно|мне грустно"), handle_sad))
     app.add_handler(MessageHandler(filters.TEXT, fallback))
 
-    # Настройка webhook
-    webhook_server = WebhookServer(application=app, listen="0.0.0.0", port=PORT, url_path="/webhook")
-    await app.bot.set_webhook(url=WEBHOOK_URL + "/webhook")
-    print(f"✅ Бот запущен и слушает порт {PORT}")
-    await webhook_server.serve()
+    # Устанавливаем webhook
+    await app.bot.set_webhook(WEBHOOK_URL + "/webhook")
 
-if name == "__main__":
+    await app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_path="/webhook",
+        allowed_updates=Update.ALL_TYPES,
+    )
+
+if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     import asyncio
     asyncio.run(main())
