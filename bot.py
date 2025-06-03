@@ -1,45 +1,37 @@
 import os
 import random
 import logging
-from datetime import datetime, time
+from datetime import datetime, timedelta
 from telegram import (
-    Update,
-    ReplyKeyboardMarkup,
-    ReplyKeyboardRemove,
-    KeyboardButton,
+    Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 )
 from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
-    ConversationHandler,
-    CallbackContext,
+    ApplicationBuilder, ContextTypes, CommandHandler,
+    MessageHandler, CallbackQueryHandler, filters
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
-# --- Настройки ---
+# Настройки
 ADMIN_ID = 6184367469
 WHITELIST = {6184367469, 6432605813}
-
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 PORT = int(os.getenv("PORT", 10000))
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-# --- Кнопки ---
-BUTTON_TIME = "Сколько прошло ⏳"
-BUTTON_SAD = "Мне грустно 😢"
-BUTTON_ADMIN = "Для администратора 🛠"
-BUTTON_BROADCAST = "Сообщение всем 👥"
-BUTTON_CANCEL = "Отмена ❌"
+# Логирование
+logging.basicConfig(level=logging.INFO)
 
-keyboard = ReplyKeyboardMarkup(
-    [[BUTTON_TIME], [BUTTON_SAD], [BUTTON_ADMIN]],
+# Клавиатуры
+main_keyboard = ReplyKeyboardMarkup(
+    [["Сколько прошло ⏳", "Мне грустно 😢"], ["Для администратора 🛠️"]],
     resize_keyboard=True
 )
 
-# --- Комплименты ---
+admin_inline_keyboard = InlineKeyboardMarkup([
+    [InlineKeyboardButton("📢 Сообщение всем разрешённым", callback_data="broadcast")],
+])
+
 COMPLIMENTS = [
     "Ты делаешь этот мир светлее 🌟",
     "Твоя улыбка способна растопить лёд ❄️😊",
@@ -51,13 +43,13 @@ COMPLIMENTS = [
     "Ты — как луч солнца в пасмурный день 🌈",
     "Твоя энергия — заразительна 🔥",
     "Ты особенная. Никто не может сравниться с тобой 🌹",
-    "Я тебя очень-очень люблю, маленькая моя 💖",
-    "Ты не одна. Всё будет хорошо 🌸",
-    "Ты сильнее, чем ты думаешь 💫",
-    "Ты заслуживаешь счастья. И оно рядом 🌷",
+    "Я тебя очень очень люблю, маленькая моя 💖",
+    "Ты — подарок в этом мире 🎁",
+    "Твои мысли и чувства — сокровище 💎",
+    "Ты достойна счастья и мира 🕊️",
 ]
 
-# --- Доступ ---
+# Проверка доступа
 async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id not in WHITELIST:
@@ -66,137 +58,122 @@ async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Сообщение: {update.message.text}"
         )
         await context.bot.send_message(chat_id=ADMIN_ID, text=msg)
-        await update.message.reply_text("Извините, вы не добавлены в белый список.")
+        await update.message.reply_text("Извините, вы не в белом списке.")
         return False
     return True
 
-# --- Команды ---
+# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context): return
     await update.message.reply_text(
-        "Привет! 👋 Нажми кнопку ниже, чтобы узнать сколько прошло времени, или если тебе грустно 💌",
-        reply_markup=keyboard
+        "👋 Привет! Выбирай нужную кнопку ниже.",
+        reply_markup=main_keyboard
     )
 
+# Обработка кнопки "Сколько прошло"
 async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context): return
-
     start_date = datetime(2024, 10, 10, 9, 0, 0)
     now = datetime.now()
     diff = now - start_date
-
     days = diff.days
-    hours, remainder = divmod(diff.seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-
+    hours, rem = divmod(diff.seconds, 3600)
+    minutes, seconds = divmod(rem, 60)
     text = f"⏳ С 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек."
     await update.message.reply_text(text)
 
+# Обработка кнопки "Мне грустно"
 async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context): return
-
-    user = update.effective_user
     compliment = random.choice(COMPLIMENTS)
     await update.message.reply_text(compliment)
-
+    user = update.effective_user
     user_info = f"@{user.username}" if user.username else user.first_name
     await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=f"😢 Пользователь {user_info} (ID: {user.id}) нажал «мне грустно»."
     )
 
-async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"📩 Получено сообщение от {update.effective_user.id}: {update.message.text}")
-    await check_access(update, context)
-
-# --- Админ-панель ---
-BROADCAST_MESSAGE = 1
-
-async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Обработка кнопки "Для администратора"
+async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("⛔️ Доступ запрещён.")
         return
-    buttons = [[BUTTON_BROADCAST], [BUTTON_CANCEL]]
-    await update.message.reply_text("Выберите действие:", reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True))
-    return BROADCAST_MESSAGE
+    await update.message.reply_text(
+        "Выберите действие:",
+        reply_markup=admin_inline_keyboard
+    )
 
-async def handle_broadcast_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    if text == BUTTON_BROADCAST:
-        await update.message.reply_text("Введите сообщение для рассылки всем пользователям:", reply_markup=ReplyKeyboardRemove())
-        return 2
-    elif text == BUTTON_CANCEL:
-        await update.message.reply_text("Отменено.", reply_markup=keyboard)
-        return ConversationHandler.END
+# Обработка inline-кнопок
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
-async def handle_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = update.message.text
-    sent = 0
-    for uid in WHITELIST:
-        try:
-            await context.bot.send_message(chat_id=uid, text=message)
-            sent += 1
-        except:
-            pass
-    await update.message.reply_text(f"✅ Сообщение отправлено {sent} пользователям.", reply_markup=keyboard)
-    return ConversationHandler.END
+    if query.data == "broadcast":
+        context.user_data["awaiting_broadcast"] = True
+        await query.message.reply_text("✍️ Введите сообщение для рассылки:")
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Операция отменена.", reply_markup=keyboard)
-    return ConversationHandler.END
+# Получение текстового ввода для рассылки
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    print(f"📩 Получено сообщение от {user_id}: {update.message.text}")
 
-# --- Расписание ---
-async def send_daily(update: Update = None, context: CallbackContext = None):
+    if not await check_access(update, context):
+        return
+
+    if context.user_data.get("awaiting_broadcast") and user_id == ADMIN_ID:
+        text = update.message.text
+        for uid in WHITELIST:
+            try:
+                await context.bot.send_message(chat_id=uid, text=f"📣 Сообщение от админа:\n\n{text}")
+            except Exception as e:
+                logging.warning(f"Не удалось отправить сообщение {uid}: {e}")
+        context.user_data["awaiting_broadcast"] = False
+        await update.message.reply_text("✅ Рассылка завершена.")
+    else:
+        await update.message.reply_text("🙂 Не понял команду. Используйте кнопки.")
+
+# Задача: сообщение каждый день в 9:00
+async def daily_message(context: ContextTypes.DEFAULT_TYPE):
     now = datetime.now()
     start_date = datetime(2024, 10, 10, 9, 0, 0)
     diff = now - start_date
-
     days = diff.days
-    hours, remainder = divmod(diff.seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-
-    text = f"⏳ Сегодня прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек с 10 октября 2024 года."
+    hours, rem = divmod(diff.seconds, 3600)
+    minutes, seconds = divmod(rem, 60)
+    text = f"⏰ Напоминание:\nС 10 октября 2024 прошло: {days} дней, {hours} ч, {minutes} мин, {seconds} сек."
     for uid in WHITELIST:
         try:
             await context.bot.send_message(chat_id=uid, text=text)
-        except:
-            pass
+        except Exception as e:
+            logging.warning(f"Не удалось отправить ежедневное сообщение {uid}: {e}")
 
-# --- Запуск ---
+# Главная функция
 async def main():
-    logging.basicConfig(level=logging.INFO)
-    logging.info("✅ Запуск run_webhook()")
-
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Планировщик
+    scheduler = AsyncIOScheduler(timezone="Asia/Almaty")
+    scheduler.add_job(daily_message, CronTrigger(hour=9, minute=0), args=[app.bot])
+    scheduler.start()
 
     # Обработчики
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex(f"^{BUTTON_TIME}$"), handle_time))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex(f"^{BUTTON_SAD}$"), handle_sad))
+    app.add_handler(MessageHandler(filters.Regex("Сколько прошло"), handle_time))
+    app.add_handler(MessageHandler(filters.Regex("мне грустно"), handle_sad))
+    app.add_handler(MessageHandler(filters.Regex("Для администратора"), handle_admin))
+    app.add_handler(CallbackQueryHandler(handle_callback))
+    app.add_handler(MessageHandler(filters.TEXT, handle_text))
 
-    # Админ-панель
-    admin_conversation = ConversationHandler(
-        entry_points=[MessageHandler(filters.TEXT & filters.Regex(f"^{BUTTON_ADMIN}$"), admin_panel)],
-        states={
-            BROADCAST_MESSAGE: [MessageHandler(filters.TEXT, handle_broadcast_request)],
-            2: [MessageHandler(filters.TEXT, handle_broadcast_send)]
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-    app.add_handler(admin_conversation)
-
-    app.add_handler(MessageHandler(filters.TEXT, fallback))
-
-    # Расписание
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(send_daily, trigger='cron', hour=9, minute=0, timezone='Asia/Almaty')
-    scheduler.start()
-
+    # Запуск
+    logging.info("✅ Запуск run_webhook()")
     await app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_url=f"{WEBHOOK_URL}/webhook"
+        webhook_url=WEBHOOK_URL,
+        allowed_updates=Update.ALL_TYPES
     )
-    
+
 # Главный запуск
 if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
