@@ -10,3 +10,19 @@ services:
         value: 8054080132:AAEW20FIMr-Fpr6y12xh0kYFvXB_iTTjJe4
       - key: WEBHOOK_URL
         value: https://telegram-bot-anxietyxrl.onrender.com/webhook
+
+
+services:
+  - type: web
+    name: telegram-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        value: 8054080132:AAEW20FIMr-Fpr6y12xh0kYFvXB_iTTjJe4
+      - key: WEBHOOK_DOMAIN
+        value: https://telegram-bot-anxietyxrl.onrender.com/webhook
+      - key: PORT
+        value: 8443  # или другой, например 8080, Render сам назначит порт
