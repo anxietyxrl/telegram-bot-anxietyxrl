@@ -12,27 +12,20 @@ from telegram.ext import (
     filters,
 )
 
-# ← ВАЖНО: замените на ваш Telegram ID
 ADMIN_ID = 6184367469
+WHITELIST = {6184367469, 6432605813}
 
-# Белый список пользователей
-WHITELIST = {6184367469, 6432605813}  # ← сюда ID разрешённых пользователей
-
-# Настройки
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 PORT = int(os.getenv("PORT", 8443))
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Пример: https://your-app-name.onrender.com
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-# Логирование
 logging.basicConfig(level=logging.INFO)
 
-# Клавиатура
 keyboard = ReplyKeyboardMarkup(
     [["Сколько прошло ⏳"], ["Мне грустно 😢"]],
     resize_keyboard=True
 )
 
-# Комплименты
 COMPLIMENTS = [
     "Ты делаешь этот мир светлее 🌟",
     "Твоя улыбка способна растопить лёд ❄️😊",
@@ -47,7 +40,6 @@ COMPLIMENTS = [
     "Я тебя очень очень люблю маленькая моя💖",
 ]
 
-# Проверка доступа
 async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id not in WHITELIST:
@@ -60,19 +52,15 @@ async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return False
     return True
 
-# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context):
-        return
+    if not await check_access(update, context): return
     await update.message.reply_text(
         "Привет! 👋\nНажми кнопку ниже, чтобы узнать сколько прошло времени, или если тебе грустно 💌",
         reply_markup=keyboard
     )
 
-# Обработка кнопки "Сколько прошло"
 async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context):
-        return
+    if not await check_access(update, context): return
 
     start_date = datetime(2024, 10, 10, 9, 0, 0)
     now = datetime.now()
@@ -85,10 +73,8 @@ async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"⏳ С 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек."
     await update.message.reply_text(text)
 
-# Обработка кнопки "Мне грустно"
 async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context):
-        return
+    if not await check_access(update, context): return
 
     user = update.effective_user
     compliment = random.choice(COMPLIMENTS)
@@ -100,9 +86,8 @@ async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=f"😢 Пользователь {user_info} (ID: {user.id}) нажал «мне грустно»."
     )
 
-# Обработка всех сообщений (fallback)
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await check_access(update, context)  # просто вызывает уведомление админу
+    await check_access(update, context)
 
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -112,10 +97,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("мне грустно"), handle_sad))
     app.add_handler(MessageHandler(filters.TEXT, fallback))
 
-    # Синхронно ждём установки вебхука
-    app.bot.set_webhook(WEBHOOK_URL).result()
-
-    # Запускаем вебхук (запускает event loop внутри себя)
+    # Устанавливаем webhook и запускаем сервер
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
@@ -123,11 +105,8 @@ def main():
         allowed_updates=Update.ALL_TYPES
     )
 
-if __name__== "__main__":
-    import aiohttp
-    print("✅ aiohttp успешно импортирован")
-
-    import asyncio
+if __name__ == "__main__":
+    main()
 
     loop = asyncio.get_event_loop()
     loop.create_task(main())
