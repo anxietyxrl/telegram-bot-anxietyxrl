@@ -167,16 +167,16 @@ async def main():
     # Установим вебхук на Render-домен
     await app.bot.set_webhook(url=WEBHOOK_URL)
 
+    # Только это — без idle и без updater
     await app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         webhook_url=WEBHOOK_URL,
         allowed_updates=Update.ALL_TYPES
     )
-    await app.updater.idle()
 
 # Запуск
-if __name__ == "__main__":
+if name == "__main__":
     import nest_asyncio
     import asyncio
     nest_asyncio.apply()
