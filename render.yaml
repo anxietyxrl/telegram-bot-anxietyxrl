@@ -1,11 +1,14 @@
 services:
-  - type: worker
+  - type: web
     name: bot
-    runtime: python
+    env: python
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
     envVars:
       - key: BOT_TOKEN
-        value: your_real_token_here
-      - key: PORT
-        value: "8000"  # ← добавлен только если Render требует
+        value: your_token_here
+      - key: WEBHOOK_HOST
+        value: https://your-render-url.onrender.com
+      - key: WEBHOOK_PORT
+        value: 10000
