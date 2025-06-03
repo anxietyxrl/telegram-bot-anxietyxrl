@@ -2,6 +2,8 @@ import os
 import random
 import logging
 from datetime import datetime
+import asyncio
+
 from telegram import (
     Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 )
@@ -50,33 +52,27 @@ COMPLIMENTS = [
     "Ты достойна счастья и мира 🕊",
 ]
 
-# Проверка доступа
-async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id not in WHITELIST:
         msg = (
             f"⛔️ Попытка доступа от {user.first_name} (@{user.username}) [ID: {user.id}]\n"
-            f"Сообщение: {update.message.text if update.message else 'нет текста'}"
+            f"Сообщение: {update.message.text}"
         )
         await context.bot.send_message(chat_id=ADMIN_ID, text=msg)
-        if update.message:
-            await update.message.reply_text("Извините, вы не в белом списке.")
+        await update.message.reply_text("Извините, вы не в белом списке.")
         return False
     return True
 
-# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context):
-        return
+    if not await check_access(update, context): return
     await update.message.reply_text(
         "👋 Привет! Выбирай нужную кнопку ниже.",
         reply_markup=main_keyboard
     )
 
-# Обработка "Сколько прошло"
 async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context):
-        return
+    if not await check_access(update, context): return
     start_date = datetime(2024, 10, 10, 9, 0, 0)
     now = datetime.now()
     diff = now - start_date
@@ -86,10 +82,8 @@ async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"⏳ С 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек."
     await update.message.reply_text(text)
 
-# Обработка "Мне грустно"
 async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context):
-        return
+    if not await check_access(update, context): return
     compliment = random.choice(COMPLIMENTS)
     await update.message.reply_text(compliment)
     user = update.effective_user
@@ -99,7 +93,6 @@ async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=f"😢 Пользователь {user_info} (ID: {user.id}) нажал «мне грустно»."
     )
 
-# Обработка "Для администратора"
 async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("⛔️ Доступ запрещён.")
@@ -109,21 +102,17 @@ async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=admin_inline_keyboard
     )
 
-# Обработка inline-кнопок администратора
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     if query.data == "broadcast":
         context.user_data["awaiting_broadcast"] = True
         await query.message.reply_text("✍️ Введите сообщение для рассылки:")
 
-# Получение текстового ввода для рассылки
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not await check_access(update, context):
         return
-
     if context.user_data.get("awaiting_broadcast") and user_id == ADMIN_ID:
         text = update.message.text
         for uid in WHITELIST:
@@ -136,11 +125,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("🙂 Не понял. Используйте кнопки.")
 
-# Фоллбек при непонятных сообщениях
-async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🙂 Не понял. Используйте кнопки.")
-
-# Ежедневное сообщение в 9:00
 async def daily_message(context: ContextTypes.DEFAULT_TYPE):
     now = datetime.now()
     start_date = datetime(2024, 10, 10, 9, 0, 0)
@@ -155,7 +139,6 @@ async def daily_message(context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.warning(f"Не удалось отправить ежедневное сообщение {uid}: {e}")
 
-# Главная функция запуска
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -164,31 +147,27 @@ async def main():
     scheduler.start()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.Regex(r"(?i)^Сколько прошло.*"), handle_time))
-    app.add_handler(MessageHandler(filters.Regex(r"(?i)^Мне грустно.*"), handle_sad))
-    app.add_handler(MessageHandler(filters.Regex(r"(?i)^Для администратора.*"), handle_admin))
+    app.add_handler(MessageHandler(filters.Regex("Сколько прошло"), handle_time))
+    app.add_handler(MessageHandler(filters.Regex("мне грустно"), handle_sad))
+    app.add_handler(MessageHandler(filters.Regex("Для администратора"), handle_admin))
     app.add_handler(CallbackQueryHandler(handle_callback))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.Regex(r"(?i)^(Сколько прошло|Мне грустно|Для администратора).*"), fallback))
-    app.add_handler(MessageHandler(filters.TEXT, handle_text))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     logger.info("✅ Запуск run_webhook()")
     await app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         webhook_url=WEBHOOK_URL,
-        allowed_updates=Update.ALL_TYPES,
+        allowed_updates=["message", "callback_query"]
     )
 
-# Точка входа
 if __name__ == "__main__":
-    import sys
-    import asyncio
-
     try:
-        asyncio.get_event_loop().run_until_complete(main())
+        asyncio.run(main())
     except RuntimeError as e:
-        # На Render может быть уже запущен event loop
-        print("⚠️ Ошибка запуска через run_until_complete. Попытка через create_task.")
-        loop = asyncio.get_event_loop()
-        loop.create_task(main())
-        loop.run_forever()
+        if "event loop is already running" in str(e):
+            loop = asyncio.get_event_loop()
+            loop.create_task(main())
+            loop.run_forever()
+        else:
+            raise
