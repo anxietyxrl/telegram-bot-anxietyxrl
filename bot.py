@@ -91,7 +91,7 @@ async def main():
     await app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_path="/webhook",
+        path="/webhook",
         allowed_updates=Update.ALL_TYPES,
     )
 
