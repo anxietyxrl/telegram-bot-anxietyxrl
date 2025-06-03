@@ -21,6 +21,7 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 # Логирование
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Клавиатуры
 main_keyboard = ReplyKeyboardMarkup(
@@ -43,22 +44,19 @@ COMPLIMENTS = [
     "Ты — как луч солнца в пасмурный день 🌈",
     "Твоя энергия — заразительна 🔥",
     "Ты особенная. Никто не может сравниться с тобой 🌹",
-    "Я тебя очень-очень люблю, маленькая моя 💖",
+    "Я тебя очень очень люблю, маленькая моя 💖",
     "Ты — подарок в этом мире 🎁",
     "Твои мысли и чувства — сокровище 💎",
     "Ты достойна счастья и мира 🕊",
-    "Ты лучшая часть моего дня 💫",
-    "Ты сильнее, чем думаешь 🧠💪",
-    "Ты наполняешь всё смыслом 🌺"
 ]
 
 # Проверка доступа
-async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     user = update.effective_user
     if user.id not in WHITELIST:
         msg = (
             f"⛔️ Попытка доступа от {user.first_name} (@{user.username}) [ID: {user.id}]\n"
-            f"Сообщение: {update.message.text if update.message else ''}"
+            f"Сообщение: {update.message.text if update.message else 'нет текста'}"
         )
         await context.bot.send_message(chat_id=ADMIN_ID, text=msg)
         if update.message:
@@ -68,37 +66,50 @@ async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context): return
-    await update.message.reply_text("👋 Привет! Выбирай нужную кнопку ниже.", reply_markup=main_keyboard)
+    if not await check_access(update, context):
+        return
+    await update.message.reply_text(
+        "👋 Привет! Выбирай нужную кнопку ниже.",
+        reply_markup=main_keyboard
+    )
 
-# "Сколько прошло"
+# Обработка "Сколько прошло"
 async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context): return
+    if not await check_access(update, context):
+        return
     start_date = datetime(2024, 10, 10, 9, 0, 0)
     now = datetime.now()
     diff = now - start_date
     days = diff.days
     hours, rem = divmod(diff.seconds, 3600)
     minutes, seconds = divmod(rem, 60)
-    await update.message.reply_text(f"⏳ С 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек.")
+    text = f"⏳ С 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек."
+    await update.message.reply_text(text)
 
-# "Мне грустно"
+# Обработка "Мне грустно"
 async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context): return
+    if not await check_access(update, context):
+        return
     compliment = random.choice(COMPLIMENTS)
     await update.message.reply_text(compliment)
     user = update.effective_user
-    who = f"@{user.username}" if user.username else user.full_name
-    await context.bot.send_message(chat_id=ADMIN_ID, text=f"😢 Пользователь {who} (ID: {user.id}) нажал «Мне грустно».")
+    user_info = f"@{user.username}" if user.username else user.first_name
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"😢 Пользователь {user_info} (ID: {user.id}) нажал «мне грустно»."
+    )
 
-# "Для администратора"
+# Обработка "Для администратора"
 async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("⛔️ Доступ запрещён.")
         return
-    await update.message.reply_text("Выберите действие:", reply_markup=admin_inline_keyboard)
+    await update.message.reply_text(
+        "Выберите действие:",
+        reply_markup=admin_inline_keyboard
+    )
 
-# inline-кнопки
+# Обработка inline-кнопок администратора
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -107,10 +118,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["awaiting_broadcast"] = True
         await query.message.reply_text("✍️ Введите сообщение для рассылки:")
 
-# Ввод текста (рассылка)
+# Получение текстового ввода для рассылки
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if not await check_access(update, context): return
+    if not await check_access(update, context):
+        return
 
     if context.user_data.get("awaiting_broadcast") and user_id == ADMIN_ID:
         text = update.message.text
@@ -118,16 +130,20 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await context.bot.send_message(chat_id=uid, text=f"📣 Сообщение от админа:\n\n{text}")
             except Exception as e:
-                logging.warning(f"❌ Ошибка при отправке пользователю {uid}: {e}")
+                logger.warning(f"Не удалось отправить сообщение {uid}: {e}")
         context.user_data["awaiting_broadcast"] = False
         await update.message.reply_text("✅ Рассылка завершена.")
     else:
         await update.message.reply_text("🙂 Не понял. Используйте кнопки.")
 
-# Ежедневное сообщение
+# Фоллбек при непонятных сообщениях
+async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🙂 Не понял. Используйте кнопки.")
+
+# Ежедневное сообщение в 9:00
 async def daily_message(context: ContextTypes.DEFAULT_TYPE):
-    start_date = datetime(2024, 10, 10, 9, 0, 0)
     now = datetime.now()
+    start_date = datetime(2024, 10, 10, 9, 0, 0)
     diff = now - start_date
     days = diff.days
     hours, rem = divmod(diff.seconds, 3600)
@@ -137,9 +153,9 @@ async def daily_message(context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(chat_id=uid, text=text)
         except Exception as e:
-            logging.warning(f"Ошибка при ежедневной отправке {uid}: {e}")
+            logger.warning(f"Не удалось отправить ежедневное сообщение {uid}: {e}")
 
-# Основной запуск
+# Главная функция запуска
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -148,21 +164,19 @@ async def main():
     scheduler.start()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.Regex("Сколько прошло"), handle_time))
-    app.add_handler(MessageHandler(filters.Regex("мне грустно"), handle_sad))
-    app.add_handler(MessageHandler(filters.Regex("Для администратора"), handle_admin))
+    app.add_handler(MessageHandler(filters.Regex(r"(?i)^Сколько прошло.*"), handle_time))
+    app.add_handler(MessageHandler(filters.Regex(r"(?i)^Мне грустно.*"), handle_sad))
+    app.add_handler(MessageHandler(filters.Regex(r"(?i)^Для администратора.*"), handle_admin))
     app.add_handler(CallbackQueryHandler(handle_callback))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.Regex(r"(?i)^(Сколько прошло|Мне грустно|Для администратора).*"), fallback))
     app.add_handler(MessageHandler(filters.TEXT, handle_text))
 
-    logging.info("✅ Запуск Webhook")
-    await app.initialize()
-    await app.start()
-    await app.updater.start_webhook(
+    logger.info("✅ Запуск run_webhook()")
+    await app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        url_path="",
         webhook_url=WEBHOOK_URL,
-        allowed_updates=Update.ALL_TYPES
+        allowed_updates=Update.ALL_TYPES,
     )
 
 # Точка входа
