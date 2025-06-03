@@ -9,6 +9,7 @@ services:
       pip install --upgrade pip
       pip install -r requirements.txt
       pip install httpx unicorn unloop
+      pip install tornado
     startCommand: python bot.py
     envVars:
       - key: BOT_TOKEN
