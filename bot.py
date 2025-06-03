@@ -167,8 +167,7 @@ async def main():
     # Установим вебхук на Render-домен
     await app.bot.set_webhook(url=WEBHOOK_URL)
 
-    await app.start()
-    await app.updater.start_webhook(
+    await app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         webhook_url=WEBHOOK_URL,
