@@ -116,6 +116,7 @@ async def main():
         listen="0.0.0.0",
         port=PORT,
         webhook_url=WEBHOOK_URL,
+        webhook_path="/webhook",
         allowed_updates=Update.ALL_TYPES
     )
 
