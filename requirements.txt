@@ -1,5 +1,4 @@
-python-telegram-bot[webhook]
+python-telegram-bot[http2]==22.1
 python-dotenv
 pytz
-aiohttp
 nest_asyncio
