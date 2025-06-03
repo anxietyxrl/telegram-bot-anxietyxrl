@@ -17,4 +17,4 @@ services:
       - key: WEBHOOK_URL
         value: https://telegram-bot-anxietyxrl.onrender.com
       - key: PORT
-        value: 8443
+        value: 10000
