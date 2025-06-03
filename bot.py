@@ -124,7 +124,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context): return
 
-    start_date = datetime(2024, 10, 10, 0, 0, 0)
+    start_date = datetime(2024, 10, 10, 9, 0, 0)
     now = datetime.now()
     diff = now - start_date
 
