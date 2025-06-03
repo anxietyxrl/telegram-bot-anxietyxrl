@@ -2,3 +2,4 @@ python-telegram-bot[webhook]==22.1
 python-dotenv
 pytz
 nest_asyncio
+aiohttp
