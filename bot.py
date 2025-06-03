@@ -4,9 +4,7 @@ import logging
 from datetime import datetime
 import asyncio
 
-from telegram import (
-    Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
-)
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ApplicationBuilder, ContextTypes, CommandHandler,
     MessageHandler, CallbackQueryHandler, filters
@@ -14,18 +12,17 @@ from telegram.ext import (
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-# Настройки
+# --- Настройки ---
 ADMIN_ID = 6184367469
 WHITELIST = {6184367469, 6432605813}
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 PORT = int(os.getenv("PORT", 10000))
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-# Логирование
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Клавиатуры
+# --- Клавиатуры ---
 main_keyboard = ReplyKeyboardMarkup(
     [["Сколько прошло ⏳", "Мне грустно 😢"], ["Для администратора 🛠"]],
     resize_keyboard=True
@@ -52,27 +49,31 @@ COMPLIMENTS = [
     "Ты достойна счастья и мира 🕊",
 ]
 
+# --- Хэндлеры и функции ---
 async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id not in WHITELIST:
         msg = (
             f"⛔️ Попытка доступа от {user.first_name} (@{user.username}) [ID: {user.id}]\n"
-            f"Сообщение: {update.message.text}"
+            f"Сообщение: {update.message.text if update.message else 'no message'}"
         )
         await context.bot.send_message(chat_id=ADMIN_ID, text=msg)
-        await update.message.reply_text("Извините, вы не в белом списке.")
+        if update.message:
+            await update.message.reply_text("Извините, вы не в белом списке.")
         return False
     return True
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context): return
+    if not await check_access(update, context):
+        return
     await update.message.reply_text(
         "👋 Привет! Выбирай нужную кнопку ниже.",
         reply_markup=main_keyboard
     )
 
 async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context): return
+    if not await check_access(update, context):
+        return
     start_date = datetime(2024, 10, 10, 9, 0, 0)
     now = datetime.now()
     diff = now - start_date
@@ -83,7 +84,8 @@ async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text)
 
 async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context): return
+    if not await check_access(update, context):
+        return
     compliment = random.choice(COMPLIMENTS)
     await update.message.reply_text(compliment)
     user = update.effective_user
@@ -108,8 +110,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "broadcast":
         context.user_data["awaiting_broadcast"] = True
         await query.message.reply_text("✍️ Введите сообщение для рассылки:")
-
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not await check_access(update, context):
         return
@@ -139,7 +140,7 @@ async def daily_message(context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.warning(f"Не удалось отправить ежедневное сообщение {uid}: {e}")
 
-async def main():
+def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     scheduler = AsyncIOScheduler(timezone="Asia/Almaty")
@@ -153,21 +154,17 @@ async def main():
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
-    logger.info("✅ Запуск run_webhook()")
-    await app.run_webhook(
+    logger.info("Запуск webhook...")
+
+    # Запускаем без asyncio.run()
+    loop = asyncio.get_event_loop()
+    loop.create_task(app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         webhook_url=WEBHOOK_URL,
         allowed_updates=["message", "callback_query"]
-    )
+    ))
+    loop.run_forever()
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except RuntimeError as e:
-        if "event loop is already running" in str(e):
-            loop = asyncio.get_event_loop()
-            loop.create_task(main())
-            loop.run_forever()
-        else:
-            raise
+    main()
