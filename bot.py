@@ -16,7 +16,7 @@ ADMIN_ID = 6184367469
 WHITELIST = {6184367469, 6432605813}
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-PORT = int(os.getenv("PORT", 8443))
+PORT = int(os.getenv("PORT", 10000))
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 logging.basicConfig(level=logging.INFO)
