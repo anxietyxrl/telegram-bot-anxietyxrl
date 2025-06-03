@@ -1,15 +1,14 @@
 import os
-import random
 import logging
 from datetime import datetime
-import asyncio
+import random
 
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
-    ContextTypes,
     CommandHandler,
     MessageHandler,
+    ContextTypes,
     filters,
 )
 
@@ -73,9 +72,9 @@ async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context): return
-    user = update.effective_user
     compliment = random.choice(COMPLIMENTS)
     await update.message.reply_text(compliment)
+    user = update.effective_user
     user_info = f"@{user.username}" if user.username else user.first_name
     await context.bot.send_message(
         chat_id=ADMIN_ID,
@@ -85,24 +84,18 @@ async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await check_access(update, context)
 
-async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+if name == "__main__":
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Сколько прошло"), handle_time))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("мне грустно"), handle_sad))
-    app.add_handler(MessageHandler(filters.TEXT, fallback))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex("Сколько прошло"), handle_time))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex("грустно"), handle_sad))
+    application.add_handler(MessageHandler(filters.TEXT, fallback))
 
-    print("✅ Устанавливаю webhook...")
-    await app.bot.set_webhook(WEBHOOK_URL)
-
-    print("✅ Запуск run_webhook()")
-    await app.run_webhook(
+    logging.info("✅ Запуск run_webhook()")
+    application.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         webhook_url=WEBHOOK_URL,
         allowed_updates=Update.ALL_TYPES
     )
-
-if __name__ == "__main__":
-    asyncio.run(main())
