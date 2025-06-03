@@ -181,6 +181,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Сколько прошло"), handle_time))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("мне грустно"), handle_sad))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^Для администратора"), handle_admin))
     app.add_handler(MessageHandler(filters.TEXT, fallback))
 
     logger.info("✅ Запуск run_webhook()")
