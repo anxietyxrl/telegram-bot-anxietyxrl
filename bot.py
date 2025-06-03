@@ -137,7 +137,20 @@ async def main():
         allowed_updates=Update.ALL_TYPES
     )
 
-# Запуск
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+# Главный запуск
+if name == "__main__":
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Сколько прошло"), handle_time))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("мне грустно"), handle_sad))
+    app.add_handler(MessageHandler(filters.TEXT, fallback))
+
+    logger.info("✅ Запуск run_webhook()")
+
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=WEBHOOK_URL,
+        allowed_updates=Update.ALL_TYPES
+    )
