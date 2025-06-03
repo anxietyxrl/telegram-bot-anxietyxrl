@@ -1,4 +1,5 @@
 python-telegram-bot==22.1
+apscheduler
 python-dotenv
 pytz
 nest_asyncio
