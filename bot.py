@@ -2,19 +2,21 @@ import os
 import random
 import logging
 from datetime import datetime
+from pytz import timezone
+
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
+    ContextTypes,
     CommandHandler,
     MessageHandler,
-    ContextTypes,
     filters,
 )
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # Константы
 ADMIN_ID = 6184367469
 WHITELIST = {6184367469, 6432605813}
-
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 PORT = int(os.getenv("PORT", 10000))
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
@@ -65,7 +67,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=keyboard
     )
 
-# Обработка запроса времени
+# Обработка кнопки "Сколько прошло"
 async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context): return
 
@@ -80,7 +82,7 @@ async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"⏳ С 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек."
     await update.message.reply_text(text)
 
-# Обработка "Мне грустно"
+# Обработка кнопки "Мне грустно"
 async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context): return
 
@@ -94,25 +96,48 @@ async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=f"😢 Пользователь {user_info} (ID: {user.id}) нажал «мне грустно»."
     )
 
-# Fallback: всё остальное
+# Фолбэк: любые другие сообщения
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"📩 Получено сообщение от {update.effective_user.id}: {update.message.text}")
     await check_access(update, context)
 
-# Главный запуск
-if __name__ == "__main__":
+# Задача для ежедневной отправки времени
+async def send_daily_message(app):
+    start_date = datetime(2024, 10, 10, 9, 0, 0)
+    now = datetime.now()
+    diff = now - start_date
+    days = diff.days
+    hours, rem = divmod(diff.seconds, 3600)
+    minutes, seconds = divmod(rem, 60)
+
+    text = f"🕘 Доброе утро!\nС 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек."
+    await app.bot.send_message(chat_id=ADMIN_ID, text=text)
+
+# Главная функция
+async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    # Регистрируем обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Сколько прошло"), handle_time))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("мне грустно"), handle_sad))
     app.add_handler(MessageHandler(filters.TEXT, fallback))
 
+    # Планировщик задачи
+    scheduler = AsyncIOScheduler(timezone=timezone("Asia/Almaty"))
+    scheduler.add_job(send_daily_message, "cron", hour=9, minute=0, args=[app])
+    scheduler.start()
+
     logger.info("✅ Запуск run_webhook()")
 
-    app.run_webhook(
+    await app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_url=WEBHOOK_URL,
+        webhook_url=f"{WEBHOOK_URL}/webhook",
         allowed_updates=Update.ALL_TYPES
     )
+
+# Запуск
+if name == "__main__":
+    import asyncio
+    asyncio.run(main())
