@@ -104,5 +104,5 @@ async def main():
         allowed_updates=Update.ALL_TYPES
     )
 
-if name == "__main__":
+if __name__ == "__main__":
     asyncio.run(main())
