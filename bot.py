@@ -1,50 +1,29 @@
 import os
-import asyncio
-from datetime import datetime, timedelta
-from random import choice
-
-import pytz
-from telegram import Update, ReplyKeyboardMarkup
+import random
+import logging
+from telegram import (
+    Update,
+    ReplyKeyboardMarkup,
+)
 from telegram.ext import (
     ApplicationBuilder,
-    CommandHandler,
     ContextTypes,
+    CommandHandler,
     MessageHandler,
-    filters
+    filters,
 )
 
-karaganda_tz = pytz.timezone("Asia/Almaty")
-start_date = datetime(2024, 10, 10, tzinfo=karaganda_tz)
-user_ids = set()
+# Вставь сюда свой Telegram user ID
+ADMIN_ID = 123456789  # ← замени на свой
 
-def get_time_difference():
-    now = datetime.now(karaganda_tz)
-    delta = now - start_date
-    days = delta.days
-    hours = delta.seconds // 3600
-    minutes = (delta.seconds % 3600) // 60
-    seconds = delta.seconds % 60
-    return (
-        f"С 10 октября 2024 года прошло:\n"
-        f"{days} дней, {hours} часов, {minutes} минут и {seconds} секунд."
-    )
+# Вставь сюда токен или используй os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN") or "1234567890:ABCDEF..."  # ← замени на свой токен
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_ids.add(update.effective_user.id)
-    keyboard = [["📆 Сколько прошло?"], ["😢 Мне грустно"]]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    await update.message.reply_text(
-        "Привет мое солнышко! Я буду присылать каждый день в 9:00, сколько прошло с 10.10.2024.\n"
-        "Можешь нажать кнопку ниже, если хочешь узнать или получить поддержку ❤️",
-        reply_markup=reply_markup
-    )
+# Включаем логгирование
+logging.basicConfig(level=logging.INFO)
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    if text == "📆 Сколько прошло?":
-        await update.message.reply_text(get_time_difference())
-    elif text == "😢 Мне грустно":
-        compliments = [
+# Комплименты для девушек
+COMPLIMENTS = [
             "Ты делаешь этот мир светлее 🌟",
             "Твоя улыбка способна растопить лёд ❄️😊",
             "Ты невероятно умная и сильная 💪",
@@ -56,31 +35,59 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Твоя энергия — заразительна 🔥",
             "Ты особенная. Никто не может сравниться с тобой 🌹",
             "Я тебя очень очень люблю маленькая моя💖",
-        ]
-        await update.message.reply_text(choice(compliments))
+]
 
-async def daily_message_task(app):
-    while True:
-        now = datetime.now(karaganda_tz)
-        target_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
-        if now >= target_time:
-            target_time += timedelta(days=1)
-        wait_seconds = (target_time - now).total_seconds()
-        await asyncio.sleep(wait_seconds)
-        for user_id in user_ids:
-            try:
-                await app.bot.send_message(chat_id=user_id, text=get_time_difference())
-            except Exception as e:
-                print(f"Ошибка при отправке пользователю {user_id}: {e}")
+# Клавиатура
+keyboard = ReplyKeyboardMarkup(
+    [["Сколько прошло ⏳"], ["Мне грустно 😢"]],
+    resize_keyboard=True
+)
 
-if __name__ == "__main__":
-    app = ApplicationBuilder().token(os.getenv("BOT_TOKEN")).build()
+# Обработчик команды /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "Привет! 👋\nНажми кнопку ниже, чтобы узнать сколько прошло времени, или если тебе грустно 💌",
+        reply_markup=keyboard
+    )
+
+# Обработчик «Сколько прошло»
+async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from datetime import datetime
+
+    start_date = datetime(2024, 10, 10, 0, 0, 0)
+    now = datetime.now()
+    diff = now - start_date
+
+    days = diff.days
+    hours, remainder = divmod(diff.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    text = f"⏳ С момента 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек."
+    await update.message.reply_text(text)
+
+# Обработчик «мне грустно»
+async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    chat_id = update.effective_chat.id
+
+    compliment = random.choice(COMPLIMENTS)
+    await context.bot.send_message(chat_id=chat_id, text=compliment)
+
+    # Уведомление администратору
+    if ADMIN_ID:
+        user_info = f"@{user.username}" if user.username else user.first_name
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"😢 Пользователь {user_info} (ID: {user.id}) нажал «мне грустно»."
+        )
+
+# Запуск бота
+if name == "__main__":
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Сколько прошло"), handle_time))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("мне грустно"), handle_sad))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Мне грустно"), handle_sad))
 
-    async def on_startup(app):
-        asyncio.create_task(daily_message_task(app))
-
-    app.post_init = on_startup
-    print("Бот запущен")
     app.run_polling()
