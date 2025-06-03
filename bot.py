@@ -101,7 +101,6 @@ async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await check_access(update, context)  # просто вызывает уведомление админу
 
-# Главная асинхронная функция
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -112,7 +111,6 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT, fallback))
 
     await app.initialize()
-
     await app.bot.set_webhook(url=WEBHOOK_URL)
 
     await app.run_webhook(
@@ -120,14 +118,15 @@ async def main():
         port=PORT,
         webhook_url=WEBHOOK_URL,
         allowed_updates=Update.ALL_TYPES,
-        close_loop=False
+        close_loop=False  # НЕ закрываем event loop после завершения
     )
 
-
-if __name__ == "__main__":
+if name == "__main__":
     import aiohttp
     print("✅ aiohttp успешно импортирован")
 
     import asyncio
+
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    loop.create_task(main())
+    loop.run_forever()
