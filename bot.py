@@ -153,7 +153,6 @@ async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await check_access(update, context)  # просто вызывает уведомление админу
 
-# Основная функция запуска
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -163,18 +162,23 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Мне грустно"), handle_sad))
     app.add_handler(MessageHandler(filters.TEXT, fallback))
 
-    # Устанавливаем webhook
+    await app.initialize()
+
+    # Установим вебхук на Render-домен
     await app.bot.set_webhook(url=WEBHOOK_URL)
 
-    await app.run_webhook(
+    await app.start()
+    await app.updater.start_webhook(
         listen="0.0.0.0",
         port=PORT,
+        webhook_url=WEBHOOK_URL,
         allowed_updates=Update.ALL_TYPES
     )
+    await app.updater.idle()
 
 # Запуск
 if __name__ == "__main__":
     import asyncio
     import nest_asyncio
     nest_asyncio.apply()
-    asyncio.get_event_loop().run_until_complete(main())
+    asyncio.run(main())
