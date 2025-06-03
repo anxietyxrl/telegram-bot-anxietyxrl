@@ -113,20 +113,21 @@ async def main():
 
     await app.initialize()
 
-    # Установим вебхук на Render-домен
     await app.bot.set_webhook(url=WEBHOOK_URL)
 
     await app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         webhook_url=WEBHOOK_URL,
-    allowed_updates=Update.ALL_TYPES
+        allowed_updates=Update.ALL_TYPES,
+        close_loop=False
     )
 
-# Запуск
-if __name__ == "__main__":
+
+if name == "__main__":
     import aiohttp
     print("✅ aiohttp успешно импортирован")
 
     import asyncio
-    asyncio.run(main())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
