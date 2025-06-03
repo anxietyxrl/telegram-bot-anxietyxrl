@@ -1,9 +1,8 @@
 import asyncio
 import logging
 import os
-import random
-from datetime import datetime, timedelta, timezone
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from datetime import datetime, timedelta
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -13,13 +12,20 @@ from telegram.ext import (
     filters,
 )
 
+# Логгирование
+logging.basicConfig(level=logging.INFO)
+
+# Переменные окружения
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
-WEBHOOK_URL = "https://telegram-bot-anxietyxrl.onrender.com"
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 PORT = int(os.getenv("PORT", "10000"))
 
 # Белый список пользователей
-WHITELIST = {ADMIN_ID, 123456789}  # ← добавь нужные user_id
+WHITE_LIST = {ADMIN_ID}
+
+# Дата отсчета
+START_DATE = datetime(2024, 10, 10)
 
 # Комплименты для кнопки "Мне грустно"
 COMPLIMENTS = [
@@ -39,90 +45,91 @@ COMPLIMENTS = [
     "Ты достойна счастья и мира 🕊",
 ]
 
-# Время отсчёта
-START_DATE = datetime(2024, 10, 10, tzinfo=timezone(timedelta(hours=6)))
+# Главное меню
+def get_main_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Мне грустно", callback_data="sad")],
+        [InlineKeyboardButton("Для администратора", callback_data="admin")] if ADMIN_ID in WHITE_LIST else []
+    ])
 
-logging.basicConfig(level=logging.INFO)
+# Админ меню
+def get_admin_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📣 Сообщение всем", callback_data="broadcast")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back")]
+    ])
 
-
-def is_whitelisted(user_id: int) -> bool:
-    return user_id in WHITELIST
-
-
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if not is_whitelisted(user_id):
-        await context.bot.send_message(chat_id=ADMIN_ID, text=f"⛔ Попытка доступа от {user_id}")
+    if user_id not in WHITE_LIST:
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f"❌ Попытка доступа от {user_id}")
         return
-    keyboard = [
-        [InlineKeyboardButton("Мне грустно", callback_data="sad")],
-    ]
-    if user_id == ADMIN_ID:
-        keyboard.append([InlineKeyboardButton("Для администратора", callback_data="admin_menu")])
-    await update.message.reply_text("Добро пожаловать! Выберите действие:", reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text("Привет! Выбери действие:", reply_markup=get_main_keyboard())
 
-
+# Обработка кнопок
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
     user_id = query.from_user.id
+    await query.answer()
 
-    if not is_whitelisted(user_id):
-        await context.bot.send_message(chat_id=ADMIN_ID, text=f"⛔ Кнопка нажата неразрешённым пользователем: {user_id}")
+    if user_id not in WHITE_LIST:
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f"❌ Попытка доступа от {user_id}")
         return
 
     if query.data == "sad":
-        compliment = random.choice(COMPLIMENTS)
-        await query.message.reply_text(compliment)
+        from random import choice
+        await query.edit_message_text(text=choice(COMPLIMENTS), reply_markup=get_main_keyboard())
 
-    elif query.data == "admin_menu" and user_id == ADMIN_ID:
-        keyboard = [
-            [InlineKeyboardButton("📨 Сообщение всем", callback_data="broadcast")],
-        ]
-        await query.message.reply_text("Админ-меню:", reply_markup=InlineKeyboardMarkup(keyboard))
+    elif query.data == "admin" and user_id == ADMIN_ID:
+        await query.edit_message_text("Меню администратора:", reply_markup=get_admin_keyboard())
 
     elif query.data == "broadcast" and user_id == ADMIN_ID:
-        await query.message.reply_text("Введите сообщение для рассылки:")
+        await query.edit_message_text("Введите сообщение для рассылки:")
         context.user_data["awaiting_broadcast"] = True
 
+    elif query.data == "back":
+        await query.edit_message_text("Главное меню:", reply_markup=get_main_keyboard())
 
+# Обработка обычных сообщений
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if not is_whitelisted(user_id):
-        await context.bot.send_message(chat_id=ADMIN_ID, text=f"⛔ Сообщение от неразрешённого пользователя: {user_id}")
+    if user_id not in WHITE_LIST:
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f"❌ Попытка доступа от {user_id}")
         return
 
     if context.user_data.get("awaiting_broadcast") and user_id == ADMIN_ID:
-        text = update.message.text
-        context.user_data["awaiting_broadcast"] = False
-        for uid in WHITELIST:
+        msg = update.message.text
+        for uid in WHITE_LIST:
             try:
-                await context.bot.send_message(chat_id=uid, text=f"📢 Сообщение от админа:\n{text}")
+                await context.bot.send_message(chat_id=uid, text=msg)
             except Exception as e:
-                logging.warning(f"Не удалось отправить {uid}: {e}")
-        await update.message.reply_text("✅ Сообщение отправлено.")
+                logging.error(f"Не удалось отправить {uid}: {e}")
+        context.user_data["awaiting_broadcast"] = False
+        await update.message.reply_text("✅ Рассылка завершена.", reply_markup=get_main_keyboard())
     else:
-        await update.message.reply_text("🙂 Не понял. Используйте кнопки.")
+        await update.message.reply_text("🙂 Не понял. Используйте кнопки.", reply_markup=get_main_keyboard())
 
-
+# Ежедневное сообщение
 async def send_daily_message(app):
+    await app.bot.wait_until_ready()
     while True:
-        now = datetime.now(timezone(timedelta(hours=6)))
-        next_9am = now.replace(hour=9, minute=0, second=0, microsecond=0)
-        if now >= next_9am:
-            next_9am += timedelta(days=1)
-        wait_seconds = (next_9am - now).total_seconds()
+        now = datetime.utcnow() + timedelta(hours=6)  # UTC+6 для Караганды
+        target_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
+        if now > target_time:
+            target_time += timedelta(days=1)
+        wait_seconds = (target_time - now).total_seconds()
         await asyncio.sleep(wait_seconds)
 
-        delta = datetime.now(timezone(timedelta(hours=6))) - START_DATE
-        message = f"⏰ Прошло дней с 10 октября 2024: {delta.days}"
-        for uid in WHITELIST:
+        days_passed = (datetime.utcnow() + timedelta(hours=6) - START_DATE).days
+        text = f"📅 Сегодня прошло {days_passed} дней с 10 октября 2024 года."
+        for uid in WHITE_LIST:
             try:
-                await app.bot.send_message(chat_id=uid, text=message)
+                await app.bot.send_message(chat_id=uid, text=text)
             except Exception as e:
-                logging.warning(f"Ошибка при отправке уведомления: {e}")
+                logging.error(f"Ошибка отправки ежедневного сообщения: {e}")
 
-
+# Основная функция
 async def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
@@ -130,16 +137,14 @@ async def main():
     app.add_handler(CallbackQueryHandler(handle_button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Фоновая задача для ежедневных сообщений
     asyncio.create_task(send_daily_message(app))
 
     await app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_url=WEBHOOK_URL,
-        path="/"
+        webhook_url=WEBHOOK_URL
     )
 
-
-if __name__ == "__main__":
+if name == "__main__":
+    import asyncio
     asyncio.run(main())
