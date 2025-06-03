@@ -170,6 +170,6 @@ async def main():
     )
 
 # Точка входа
-if name == "__main__":
+if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
