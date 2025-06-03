@@ -15,12 +15,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- Настройки ---
-ADMIN_ID = 6184367469
-WHITELIST = {6184367469, 6432605813}
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-PORT = int(os.getenv("PORT", 10000))
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+TOKEN = os.getenv("BOT_TOKEN")  # Токен бота из переменной окружения
+ADMIN_ID = int(os.getenv("ADMIN_ID"))  # ID администратора
+WHITELIST = set(map(int, os.getenv("WHITELIST", "").split()))  # ID разрешённых пользователей
 
 # Комплименты для кнопки "Мне грустно"
 COMPLIMENTS = [
@@ -107,3 +104,4 @@ if __name__ == "__main__":
     import asyncio
 
     asyncio.run(main())
+
