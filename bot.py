@@ -62,7 +62,8 @@ async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context): return
+    if not await check_access(update, context):
+        return
     await update.message.reply_text(
         "Привет! 👋\nНажми кнопку ниже, чтобы узнать сколько прошло времени, или если тебе грустно 💌",
         reply_markup=keyboard
@@ -70,7 +71,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Обработка кнопки "Сколько прошло"
 async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context): return
+    if not await check_access(update, context):
+        return
 
     start_date = datetime(2024, 10, 10, 9, 0, 0)
     now = datetime.now()
@@ -85,7 +87,8 @@ async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Обработка кнопки "Мне грустно"
 async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_access(update, context): return
+    if not await check_access(update, context):
+        return
 
     user = update.effective_user
     compliment = random.choice(COMPLIMENTS)
@@ -101,24 +104,23 @@ async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await check_access(update, context)  # просто вызывает уведомление админу
 
-async def main():
+def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Сколько прошло"), handle_time))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("мне грустно"), handle_sad))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Мне грустно"), handle_sad))
     app.add_handler(MessageHandler(filters.TEXT, fallback))
 
-    await app.initialize()
-    await app.bot.set_webhook(url=WEBHOOK_URL)
+    # Синхронно ждём установки вебхука
+    app.bot.set_webhook(WEBHOOK_URL).result()
 
-    await app.run_webhook(
+    # Запускаем вебхук (запускает event loop внутри себя)
+    app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         webhook_url=WEBHOOK_URL,
-        allowed_updates=Update.ALL_TYPES,
-        close_loop=False  # НЕ закрываем event loop после завершения
+        allowed_updates=Update.ALL_TYPES
     )
 
 if __name__== "__main__":
