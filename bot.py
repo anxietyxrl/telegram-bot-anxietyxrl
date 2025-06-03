@@ -2,17 +2,16 @@ import os
 import random
 import logging
 from datetime import datetime
-import asyncio
-
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
-    ContextTypes,
     CommandHandler,
     MessageHandler,
+    ContextTypes,
     filters,
 )
 
+# Константы
 ADMIN_ID = 6184367469
 WHITELIST = {6184367469, 6432605813}
 
@@ -20,14 +19,17 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 PORT = int(os.getenv("PORT", 10000))
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
+# Логирование
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Клавиатура
 keyboard = ReplyKeyboardMarkup(
     [["Сколько прошло ⏳"], ["Мне грустно 😢"]],
     resize_keyboard=True
 )
 
+# Комплименты
 COMPLIMENTS = [
     "Ты делаешь этот мир светлее 🌟",
     "Твоя улыбка способна растопить лёд ❄️😊",
@@ -42,6 +44,7 @@ COMPLIMENTS = [
     "Я тебя очень очень люблю маленькая моя💖",
 ]
 
+# Проверка доступа
 async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id not in WHITELIST:
@@ -54,6 +57,7 @@ async def check_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return False
     return True
 
+# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context): return
     await update.message.reply_text(
@@ -61,6 +65,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=keyboard
     )
 
+# Обработка запроса времени
 async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context): return
 
@@ -75,6 +80,7 @@ async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"⏳ С 10 октября 2024 прошло:\n{days} дней, {hours} ч, {minutes} мин, {seconds} сек."
     await update.message.reply_text(text)
 
+# Обработка "Мне грустно"
 async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_access(update, context): return
 
@@ -88,11 +94,13 @@ async def handle_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=f"😢 Пользователь {user_info} (ID: {user.id}) нажал «мне грустно»."
     )
 
+# Fallback: всё остальное
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"📩 Получено сообщение от {update.effective_user.id}: {update.message.text}")
     await check_access(update, context)
 
-async def main():
+# Главный запуск
+if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -101,12 +109,10 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT, fallback))
 
     logger.info("✅ Запуск run_webhook()")
-    await app.run_webhook(
+
+    app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         webhook_url=WEBHOOK_URL,
         allowed_updates=Update.ALL_TYPES
     )
-
-if __name__ == "__main__":
-    asyncio.run(main())
